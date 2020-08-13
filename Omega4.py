@@ -1,12 +1,16 @@
-"""
-@author Thimmis
-"""
+#!/usr/bin/env python3
+# @Author: Thomas Turner <thomas>
+# @Date:   2020-08-03T12:07:54+02:00
+# @Email:  thomas.benjamin.turner@gmail.com
+# @Last modified by:   thomas
+# @Last modified time: 2020-08-13T15:50:49+02:00
+
 from numpy import *
 import numpy as np
 from scipy.linalg import solve
 import MatCreator
 
-class Bathroom:
+class BathRoom:
     """
     Desc.
 
@@ -35,14 +39,14 @@ class Bathroom:
         """
         self.dx = 1/cols
         self.cols = cols
-        self.tnorth = walls*np.ones(self.cols-2)
-        self.twest = aircon*np.ones(self.cols-2)
-        self.teast = walls*np.ones(self.cols-2)#initial temp guess at boundary
-        self.south = self.tnorth.copy()
-        self.A_mat = MatCreator.MCreate(self.cols*self.cols)
-
-        self.gradient_3 = []
-        self.temp_mat = []
+        self.rows = 2*cols
+        self.tnorth = walls*np.ones(self.cols)
+        self.twest = aircon*np.ones(self.rows)
+        self.teastt = walls*np.ones(self.cols)#initial temp guess at boundary
+        self.teastb = walls*np.ones(self.cols)
+        self.tsouth = aircon*np.ones(self.cols)
+        self.A_mat = MatCreator.MCreate(self.rows+2,self.cols+2).A
+        self.temp_mat = np.zeros((self.rows+2,self.cols+2))
 
 
     def b_vector(self, E):
@@ -60,12 +64,17 @@ class Bathroom:
         """
         N, S, W = self.tnorth, self.tsouth, self.twest
         #first row of temperature values containing tnorth
-        b_vec = np.concatenate((array([0]), (-1)*N, array([0])))
-        for i in range(0,len(self.twest)):
-            temp = np.concatenate((array([-W[i]]),np.zeros(self.cols-2),array([-E[i]])))
+        b_vec = np.concatenate((np.array([0]), -N, np.array([0])))
+        #top block containing interface values
+        for i in range(self.cols):
+            temp = np.concatenate((np.array([-W[i]]),np.zeros(self.cols),np.array([-E[i]])))
+            b_vec = np.concatenate((b_vec,temp))
+        #bottom block with dirichlet conditions
+        for i in range(0,self.cols):
+            temp = np.concatenate((np.array([-W[i+self.cols]]),np.zeros(self.cols),np.array([-self.teastb[i]]) ))
             b_vec = np.concatenate((b_vec,temp))
         #last row of temperature matrixCreator
-        b_vec = np.concatenate( (b_vec,array([0]),-1*S,array([0]) ))
+        b_vec = np.concatenate( (b_vec,np.array([0]),-S ,np.array([0])) )
         return b_vec
 
     def temp_grad(self, E):
@@ -82,9 +91,22 @@ class Bathroom:
 
         """
         b_vec = self.b_vector(E)
-        self.sol_vec = solve(self.A_mat, b_vec)
-        self.temp_mat = sol_vec.reshape(self.cols,self.cols)
+        sol_vec = solve(self.A_mat, b_vec)
+        self.temp_mat = sol_vec.reshape(self.rows+2,self.cols+2)
+        gradient_3 = (E - self.temp_mat[1:self.cols+1,-1])*self.dx
 
-        temp_3 = slef.temp_mat[1:-1,-1]
+        return gradient_3
 
-        self.gradient_3 = (E - temp_3)*self.dx
+
+
+"""
+import matplotlib.pyplot as plt
+from matplotlib import *
+
+tester = BathRoom(5,10,15)
+out = tester.temp_grad(np.ones(15))
+fig, ax2 = plt.subplots()
+CS = plt.contourf(np.flip(tester.temp_mat,0),10, cmap =  plt.cm.inferno)
+cbar = fig.colorbar(CS)
+plt.show()
+"""
