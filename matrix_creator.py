@@ -3,7 +3,7 @@
 # @Date:   2020-06-17T13:27:38+02:00
 # @Email:  thomas.benjamin.turner@gmail.com
 # @Last modified by:   thomas
-# @Last modified time: 2020-08-17T17:17:43+02:00
+# @Last modified time: 2020-08-25T15:23:40+02:00
 
 
 from scipy import *
@@ -22,7 +22,7 @@ class FiniteDiffMatrix:
 
     """
 
-    def __init__(self, rows, cols):
+    def __init__(self, rows, cols, condition = False):
         """
 
         Params:
@@ -31,10 +31,13 @@ class FiniteDiffMatrix:
 
         """
         self.cols = cols
+        self.rows = rows
+        self.condition = condition
         self.squaredim = rows*cols
-        self.A = self.create_square_matrix()
+        self.stamp = self.create_kron_stamp()
+        self.A = self.create_behaviour_matrix()
 
-    def create_square_matrix(self):
+    def create_behaviour_matrix(self):
         """
 
         Params:
@@ -44,10 +47,31 @@ class FiniteDiffMatrix:
         --------
 
         """
+        #produces main finite diff matrix using kronecker product
+        A = (np.kron(np.eye(self.rows),self.stamp)
+            #concatenates the lower and upper diagonals 
+            + np.diag([1]*(self.squaredim-self.cols),k=self.cols)
+            + np.diag([1]*(self.squaredim-self.cols),k=-self.cols))
 
-        A = np.diagflat([-4]*self.squaredim) + np.diag([1]*(self.squaredim - 1), k=1) +np.diag([1]*(self.squaredim - 1), k=-1)  + np.diag([1]*(self.squaredim-self.cols),k=self.cols) + np.diag([1]*(self.squaredim-self.cols),k=-self.cols)
-        for i in range(1, self.squaredim):
-            if i % self.cols == 0:
-                A[i-1,i] = A[i,i-1] = 0
-        A[0,0] = A[-1,-1] = -3
         return A
+
+
+    def create_kron_stamp(self):
+        """
+
+        """
+        #first outline the generic stamp for Dirichlet boundary conditions
+        stamp = (np.diagflat([-4]*self.cols)
+                + np.diag([1]*(self.cols - 1), k=1)
+                + np.diag([1]*(self.cols - 1),k=-1))
+
+        #Adjusts kronecker product stamp to include left neumann BCs
+        if 'l' in self.condition:
+            stamp[0,1] = 2
+
+        #Adjusts kronecker product stamp to include right neumann BCs
+        if 'r' in self.condition:
+            stamp[-1,-2] = 2
+        else:
+            None
+        return stamp
