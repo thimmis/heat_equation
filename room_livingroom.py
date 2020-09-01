@@ -4,8 +4,8 @@
 # @Date:   2020-06-17T13:23:44+02:00
 # @Email:  thomas.benjamin.turner@gmail.com
 # @Last modified by:   thomas
-# @Last modified time: 2020-08-18T11:22:04+02:00
-# @Last modified time: 2020-08-18T11:22:04+02:00
+# @Last modified time: 2020-09-01T13:46:13+02:00
+# @Last modified time: 2020-09-01T13:46:13+02:00
 
 import numpy as np
 from numpy.linalg import solve
@@ -61,18 +61,25 @@ class LivingRoom:
         tensor matrix describing how the heat equation behaves in rectangular
         domains
 
-    gradient_2 : ndarray
-        finite difference gradient to be passed as neumann conditions to kitchen
-
-    gradient_3 : ndarray
-        finite difference gradient to be passed as neumann conditions to entryway
-
     temp_mat : ndarray
         computed temperature distribution used to model domain and calculate the
         gradient vectors passed to the kitchen and entryway.
 
     Methods:
     --------
+    sw_temp_open_close(self,hot, cold, walls)
+        constructs a south wall temperature vector scaled for the number of horizontal
+        gridpoints used. Depending on open or closed will prescribe hot or cold
+        temperatures where the door is.
+
+    construct_rhs_vector(self, WA, WB)
+        Constructs the vector used for solving the linear equation Ax = b.
+
+    temp_gradient_calc(self, WA, WB)
+        Takes the upper and lower temperature information to produce a new
+        temperature distribution for each step. Calculates the gradients at
+        each step to be passed as neumann conditions to the kitchen and
+        entryway domains.
 
 
     """
@@ -88,11 +95,11 @@ class LivingRoom:
         self.twestt = walls*np.ones(int(self.cols/2)) #boundary guess with Entry
         self.twestm = self.teast.copy()
         self.twestb = walls*np.ones(self.cols)#bounday guess with Kitchen
-        self.behaviour_matrix = matrix_creator.FiniteDiffMatrix(self.rows+2,self.cols+2).A
+        self.behaviour_matrix = matrix_creator.FiniteDiffMatrix(self.rows+2,self.cols+2,'').A
 
 
 
-    def sw_temp_open_close(self,hot, cold,walls):
+    def sw_temp_open_close(self,hot, cold, walls):
         """
         constructs temperature vector for south living room wall
 
@@ -111,12 +118,12 @@ class LivingRoom:
 
         """
         wall = walls*np.ones(self.cols)
-        for i in range(int((self.cols)/4 -2)):
+        for i in range(int((self.cols)/4 -int(self.cols/10))):
             if self.open == True:
                 wall[i] = cold
             else:
                 wall[i] = hot
-        for i in range(int(self.cols/2), int(self.cols/2 +3)):
+        for i in range(int(self.cols/2), int(self.cols/2)+int(self.cols/10)+1):
             wall[i] = hot
         return wall
 
@@ -130,9 +137,19 @@ class LivingRoom:
 
         Params:
         -------
+        WA : ndarray
+            vector containing the boundary temperature at the interface of the
+            westwall with the entryway domain.
+
+        WB : ndarray
+            vector containing the boundary temperature at the interface of the
+            westwall with the kitchen domain.
 
         Returns:
         --------
+        rhs_vec : ndarray
+            The vector of length (cols*cols) containing boundary temperatures and
+            zeros for unknown values.
 
         """
         N, S, E, WM = self.tnorth, self.tsouth, self.teast, self.twestm
@@ -167,37 +184,25 @@ class LivingRoom:
         -------
         WA : ndarray
             vector containing the boundary temperature at the interface of the
-            westwall with the entryway domain
+            westwall with the entryway domain.
 
         WB : ndarray
             vector containing the boundary temperature at the interface of the
-            westwall with the kitchen domain -- influnced
+            westwall with the kitchen domain.
 
         Returns:
         --------
-        None
+        gradient_2 : ndarray
+            Gradient vector to be passed to the kitchen as Neumann BCs.
+
+        gradient_3 : ndarray
+            Gradient vector to be passed to the entryway as Neumann BCs.
 
         """
         rhs_vector = self.construct_rhs_vector(WA,WB)
         temperature_vector = solve(self.behaviour_matrix,rhs_vector)
         self.temperature_matrix = temperature_vector.reshape(self.rows+2,self.cols+2)
-        """
-        gets temperture vectors at west wall interfaces with dirichlet condition
-        domains
-        """
-        gradient_3 = (self.temperature_matrix[1:len(self.twestt)+1,0]-WA)*self.dx
-        gradient_2 = (self.temperature_matrix[self.cols+1:-1,0]-WB)*self.dx
+        #calculate the gradients at the upper and lower westwall interfaces
+        gradient_3 = (WA - self.temperature_matrix[1:len(self.twestt)+1,0])*self.dx
+        gradient_2 = (WB - self.temperature_matrix[self.cols+1:-1,0])*self.dx
         return gradient_3, gradient_2
-
-"""
-import matplotlib.pyplot as plt
-from matplotlib import *
-
-
-tester = LivingRoom(40,5,10,20)
-tester.temp_gradient_calc(tester.twestt,tester.twestb)
-fig, ax2 = plt.subplots()
-CS = plt.contourf(np.flip(tester.temperature_matrix,0),10, cmap = plt.cm.inferno)
-cbar = fig.colorbar(CS)
-plt.show()
-"""
